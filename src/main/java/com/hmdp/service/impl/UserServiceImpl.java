@@ -14,6 +14,7 @@ import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexPatterns;
 import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.UserHolder;
 import io.netty.util.Timeout;
 import lombok.extern.log4j.Log4j;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +45,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
+
+    private String token;
 
     /**
      * 发送验证码
@@ -106,7 +109,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 5.存在
         // 6.保存用户到redis
         // 6.1生成随机的token作为登录令牌
-        String token = UUID.randomUUID().toString(true);
+        token = UUID.randomUUID().toString(true);
         // 6.2将user转换为Map
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
         Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
@@ -120,6 +123,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
         // 7.返回相应
         return Result.ok(token);
+    }
+
+    // 登出
+    @Override
+    public Result logout() {
+        stringRedisTemplate.delete(LOGIN_USER_KEY + token);
+        UserHolder.removeUser();
+        return Result.ok();
     }
 
     // 创建新用户

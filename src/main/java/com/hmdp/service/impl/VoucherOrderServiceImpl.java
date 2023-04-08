@@ -11,6 +11,7 @@ import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Resource
     private RedisIdWorker redisIdWorker;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 新增秒杀劵订单
@@ -61,10 +65,26 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
         UserDTO user = UserHolder.getUser();
         Long userId = user.getId();
-        synchronized (userId.toString().intern()) {
+
+        // 获取锁
+        SimpleRedisLock simpleRedisLock = new SimpleRedisLock("order:" + userId, stringRedisTemplate);
+        boolean isLock = simpleRedisLock.tryLock(1L);
+        // 获取失败
+        if (!isLock){
+            // 返回失败信息
+            return Result.fail("一人只能下一单");
+        }
+
+
+        try {
             // 获取代理对象
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOder(voucherId);
+        } catch (IllegalStateException e) {
+            throw new RuntimeException(e);
+        } finally {
+            // 释放锁
+            simpleRedisLock.unlock();
         }
     }
 
